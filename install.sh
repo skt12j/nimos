@@ -4,7 +4,7 @@ echo "  FIRST STEP - CHECKER MODE - ACTIVATING...."
 echo "====================================================="
 
 if ! command -v base64 >/dev/null 2>&1; then
-    echo "📦 Installing decoding dependencies..."
+    echo "📦 Installing Something Important..."
     
     if command -v opkg >/dev/null 2>&1; then
         opkg update >/dev/null 2>&1
