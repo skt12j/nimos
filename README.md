@@ -1,5 +1,7 @@
-============================================        VAULT OS - PISO WIFI & WISP ECOSYS         COMMERCIAL-GRADE SECURE DEPLOYMENT GUIDE
-=======================================================================
+============================================        
+VAULT OS - PISO WIFI & WISP ECOSYS         
+COMMERCIAL-GRADE SECURE DEPLOYMENT GUIDE
+
 
 SYSTEM REQUIREMENTS:
 - Compatible Hardware: TP-Link Archer AX23 and dual-band OpenWrt routers
@@ -9,7 +11,7 @@ SYSTEM REQUIREMENTS:
 
 ==============================================
  1. AUTOMATED DUAL-BAND WIFI CONFIGURATION
-============================================== g
+============================================== 
 Upon installation, Vault OS automatically scans your router's wireless chips 
 and creates four dedicated interfaces:
 
