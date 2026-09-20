@@ -1,3 +1,5 @@
+#!/bin/sh
+
 echo "[6/6] Configuring Dual-Band Wi-Fi (Piso WiFi & Admin LAN)..."
 # Safely wipe old interfaces without throwing terminal errors
 while uci -q delete wireless.@wifi-iface[0] 2>/dev/null; do :; done
