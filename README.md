@@ -1,7 +1,8 @@
-================================================
+=====================================
+
 VAULT OS - PISO WIFI & WISP ECOSYS         
 ENTERPRISE-GRADE SECURE DEPLOYMENT GUIDE (V2)
-================================================
+
 
 SYSTEM REQUIREMENTS:
 - Compatible Hardware: Openwrt/Immortawrt compatible routers. with wan port. 
@@ -9,9 +10,10 @@ SYSTEM REQUIREMENTS:
 - Storage: Minimum 10MB Flash
 - RAM: Minimum 64MB
 
-================================================
+=====================================
  1. AUTOMATED DUAL-BAND WIFI CONFIGURATION
-================================================ 
+=====================================
+
 Upon installation, Vault OS automatically scans your router's wireless chips 
 and creates four dedicated interfaces:
 
@@ -23,18 +25,18 @@ and creates four dedicated interfaces:
   * ANONIMO'S PISO WIFI 2.4G  (Open / No Password)
   * ANONIMO'S PISO WIFI 5G    (Open / No Password)
 
-================================================
+=====================================
  2. ADVANCED NETWORK HARDENING & QoS
-================================================ 
+===================================== 
 Vault OS includes a custom-built Linux Traffic Control (HTB) and Firewall engine:
 - True WISP Segregation: Monthly subscribers get dedicated, private speed lanes.
 - Strict Priority Queuing: Gaming (Prio 1) > WISP (Prio 2) > Regular (Prio 4) > Portal (Prio 7).
 - Anti-Tunnel Shield: Native firewall drops for VPNs, Proxies, and DNS tunnels.
 - Network Isolation: Hotspot users are strictly blocked from accessing ISP modems.
 
-================================================
+=====================================
  3. ONE-CLICK SSH INSTALLATION
-================================================
+=====================================
 
 1. Connect to your OpenWrt router via SSH:
    ssh root@192.168.1.1 (enter your openwrt login password (root) or your default one)
@@ -50,9 +52,9 @@ Vault OS includes a custom-built Linux Traffic Control (HTB) and Firewall engine
    - Write the hardened nftables engine and initialize the secure vault database.
    - Automatically reboot the router.
 
-================================================
+=====================================
  4. HARDWARE-LOCKED ACTIVATION & LICENSING
-================================================
+=====================================
 
 Vault OS utilizes node-locked security tied to your router's physical MAC.
 
@@ -62,13 +64,14 @@ Vault OS utilizes node-locked security tied to your router's physical MAC.
 4. Send that MAC address to the administrator to receive your unique License Key.
 5. Enter the key into the activation prompt. The system will securely save the license, self-destruct the activation script to prevent tampering,and unlock the full platform.
 
-================================================
+=====================================
  5. SYSTEM ACCESS REFERENCE
-================================================
+=====================================
+
 - Captive Portal Gateway: http://10.0.0.1
 - Admin Dashboard: http://192.168.1.1/admin/
   (Note: Protected by Subnet Shield; accessible exclusively via Private LAN)
-================================================
+=======================================
 
 NOTE:
 
