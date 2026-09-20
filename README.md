@@ -60,7 +60,7 @@ Vault OS utilizes node-locked security tied to your router's physical MAC.
 4. Send that MAC address to the administrator to receive your unique License Key.
 5. Enter the key into the activation prompt. The system will securely save the license, self-destruct the activation script to prevent tampering, and unlock the full platform.
 
-> **NOTE:** The activation license key is FREE.
+> **NOTE:** The first activation license key is FREE.
 
 ---
 
