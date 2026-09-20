@@ -68,7 +68,7 @@ Vault OS utilizes node-locked security tied to your router's physical MAC.
 5. Enter the key into the activation prompt. The system will securely save the license, self-destruct the activation script to prevent tampering,and unlock the full platform.
 
 
-NOTE: Activation key is FREE.
+NOTE: Activation license key is FREE.
 
 =====================================
  5. SYSTEM ACCESS REFERENCE
@@ -81,4 +81,7 @@ NOTE: Activation key is FREE.
 
 NOTE:
 
-Do not forget your admin password. (Install at your own risk) 
+Do not forget your admin password. (Install at your own risk)
+
+
+Contact me: @nimonyoka in Telegram
