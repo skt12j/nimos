@@ -38,7 +38,10 @@ Vault OS includes a custom-built Linux Traffic Control (HTB) and Firewall engine
  3. ONE-CLICK SSH INSTALLATION
 =====================================
 
-1. Connect to your OpenWrt router via SSH:
+
+1.0 Connect your pc into lan 1 port. to avoid cutting off from the logging.
+
+1.1 Connect to your OpenWrt router via SSH:
    ssh root@192.168.1.1 (enter your openwrt login password (root) or your default one)
 
 2. Copy, paste, and execute the following deployment command:
