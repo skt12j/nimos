@@ -3,6 +3,7 @@
 
 ## ⚙️ System Requirements
 * **Compatible Hardware:** OpenWrt/ImmortalWrt compatible routers with a WAN port.
+* **(Fully Reset first to avoid conflict with your current config.)**
 * **Compatible OS:** OpenWrt 22.03.x up to 25.x (nftables / Firewall4 / tc supported).
 * **Storage:** Minimum 10MB Flash
 * **RAM:** Minimum 64MB
