@@ -2,7 +2,6 @@
  * ==========================================================
  * VAULT OS - ESP8266 COIN NODE (HEADLESS / NO SCREEN EDITION) 
  * ==========================================================
- * VERSION: 9.9-8266-HEADLESS (PULSE ENGINE + EEPROM WEB PORTAL)
  */
 
 #include <ESP8266WiFi.h>
@@ -10,9 +9,6 @@
 #include <ESP8266WebServer.h>
 #include <EEPROM.h>
 
-// ==========================================
-//  GLOBALS & STORAGE
-// ==========================================
 ESP8266WebServer server(80);
 
 String currentSSID = "";
@@ -25,19 +21,34 @@ bool isAPMode = false;
 bool isServerOnline = true; 
 unsigned long lastPingTime = 0;
 
-// State Tracking
 enum SystemState { BOOTING, STANDBY, READY_INSERT, OFFLINE_MODE };
 SystemState currentState = BOOTING;
 
-// Function Prototypes
-void transmitToVault(int amount);
-void registerWithUbuntu();
-void updateLEDs();
-void changeState(SystemState newState);
+const int coinPin = 14;      // D5
+const int relayPin = 12;     // D6
+const int statusLedPin = 13; // D7
 
-// ==========================================
-//  EEPROM HELPER FUNCTIONS
-// ==========================================
+volatile int pulseCount = 0;
+volatile unsigned long lastPulseTime = 0;
+
+const unsigned long debounceDelay = 30;  
+const unsigned long batchDelay = 400;    
+
+bool insertMode = false;
+unsigned long lastBlinkTime = 0;
+bool ledState = false; 
+
+unsigned long sessionExpireTime = 0; 
+const unsigned long maxSessionLength = 30000; 
+
+void ICACHE_RAM_ATTR coinInterrupt() {
+  unsigned long currentTime = millis();
+  if (currentTime - lastPulseTime > debounceDelay) {
+    pulseCount++;
+    lastPulseTime = currentTime;
+  }
+}
+
 void writeString(int address, String data) {
   EEPROM.write(address, data.length());
   for (int i = 0; i < data.length(); ++i) {
@@ -56,37 +67,6 @@ String readString(int address) {
   return data;
 }
 
-// ==========================================
-//  HARDWARE PINOUTS & TIMERS
-// ==========================================
-const int coinPin = 14;      // D5 (Coin Signal Wire)
-const int relayPin = 12;     // D6 (Coin Acceptor 12V Relay Trigger)
-const int statusLedPin = 13; // D7 (Status LED)
-
-volatile int pulseCount = 0;
-volatile unsigned long lastPulseTime = 0;
-
-const unsigned long debounceDelay = 30;  
-const unsigned long batchDelay = 400;    
-
-bool insertMode = false;
-unsigned long lastBlinkTime = 0;
-bool ledState = false; 
-
-unsigned long sessionExpireTime = 0; 
-const unsigned long maxSessionLength = 30000; // 30-second window
-
-void ICACHE_RAM_ATTR coinInterrupt() {
-  unsigned long currentTime = millis();
-  if (currentTime - lastPulseTime > debounceDelay) {
-    pulseCount++;
-    lastPulseTime = currentTime;
-  }
-}
-
-// ==========================================
-//  HTML/JS/CSS PAYLOADS FOR AP/SETUP PORTAL
-// ==========================================
 const char* loginHTML = R"rawliteral(
 <!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
@@ -94,12 +74,9 @@ const char* loginHTML = R"rawliteral(
   .box { border: 2px solid #00f3ff; padding: 30px; display: inline-block; background: rgba(0,243,255,0.05); box-shadow: 0 0 20px #00f3ff; border-radius: 8px; width: 80%; max-width: 350px;}
   input[type='password'] { width: 90%; padding: 12px; margin: 20px 0; background: #000; color: #fff; border: 1px solid #00f3ff; text-align: center; font-size: 18px; letter-spacing: 2px; }
   button { background: #00f3ff; color: #000; font-weight: bold; font-size: 16px; padding: 12px 25px; border: none; cursor: pointer; box-shadow: 0 0 10px #00f3ff; width: 100%; transition: 0.2s; }
-  button:active { transform: scale(0.95); }
 </style></head><body>
   <div class="box">
-    <h2>🛡️ VAULT OS</h2>
-    <p style="color:#888;">AUTHORIZED PERSONNEL ONLY</p>
-    <form action="/login" method="POST">
+    <h2>🛡️ VAULT OS</h2><form action="/login" method="POST">
       <input type="password" name="pwd" placeholder="Enter Access Code" required autofocus>
       <button type="submit">ACCESS NODE</button>
     </form>
@@ -112,12 +89,11 @@ const char* dashboardHTMLPart1 = R"rawliteral(
 <style>
   body { background: #03060c; color: #fff; font-family: 'Courier New', monospace; padding: 20px; max-width: 500px; margin: auto; }
   .card { border: 1px solid #00f3ff; padding: 20px; margin-bottom: 20px; background: rgba(0,243,255,0.05); border-radius: 5px; }
-  h2 { color: #00f3ff; margin-top: 0; text-align: center; letter-spacing: 1px; }
+  h2 { color: #00f3ff; margin-top: 0; text-align: center; }
   label { font-size: 12px; color: #888; display: block; margin-bottom: 5px; margin-top: 15px;}
-  input, select { width: 100%; padding: 10px; background: #000; color: #00f3ff; border: 1px solid #555; box-sizing: border-box; font-family: monospace; font-size: 14px;}
-  button { width: 100%; background: #00f3ff; color: #000; font-weight: bold; padding: 12px; border: none; margin-top: 20px; cursor: pointer; }
+  input, select { width: 100%; padding: 10px; background: #000; color: #00f3ff; border: 1px solid #555; box-sizing: border-box; }
+  button { width: 100%; background: #00f3ff; color: #000; font-weight: bold; padding: 12px; border: none; margin-top: 20px; }
   .btn-scan { background: #10b981; margin-top: 5px; padding: 8px; font-size: 12px; }
-  .btn-logout { background: #ff2a2a; color: #fff; box-shadow: 0 0 10px #ff2a2a; margin-top: 10px; }
 </style>
 <script>
   function scanWifi() {
@@ -129,50 +105,22 @@ const char* dashboardHTMLPart1 = R"rawliteral(
   }
 </script>
 </head><body>
-  <h2>⚙️ SYSTEM CONFIG</h2>
-  <form action="/save" method="POST">
+  <h2>⚙️ SYSTEM CONFIG</h2><form action="/save" method="POST">
     <div class="card"><h3 style="color:#10b981; margin:0;">1. NETWORK UPLINK</h3>
     <label>Select Network</label><input type="text" id="ssidSelect" name="ssid" value=")rawliteral";
 
-// ==========================================
-//  LED STATE MACHINE
-// ==========================================
-void changeState(SystemState newState) {
-  currentState = newState;
-  updateLEDs();
-}
-
 void updateLEDs() {
   unsigned long currentTime = millis();
-  
   if (currentState == BOOTING || currentState == OFFLINE_MODE) {
-    if (currentTime - lastBlinkTime > 500) {
-      ledState = !ledState;
-      digitalWrite(statusLedPin, ledState ? HIGH : LOW);
-      lastBlinkTime = currentTime;
-    }
-  } 
-  else if (currentState == READY_INSERT) {
-    if (currentTime - lastBlinkTime > 120) { // Fast blink when user can drop coins
-      ledState = !ledState;
-      digitalWrite(statusLedPin, ledState ? HIGH : LOW);
-      lastBlinkTime = currentTime;
-    }
-  } 
-  else {
-    digitalWrite(statusLedPin, HIGH); // Solid ON in standby/ready mode
-  }
+    if (currentTime - lastBlinkTime > 500) { ledState = !ledState; digitalWrite(statusLedPin, ledState ? HIGH : LOW); lastBlinkTime = currentTime; }
+  } else if (currentState == READY_INSERT) {
+    if (currentTime - lastBlinkTime > 120) { ledState = !ledState; digitalWrite(statusLedPin, ledState ? HIGH : LOW); lastBlinkTime = currentTime; }
+  } else { digitalWrite(statusLedPin, HIGH); }
 }
 
-// ==========================================
-//  WEB UI HANDLERS
-// ==========================================
-bool isAuthenticated() {
-  if (server.hasHeader("Cookie")) {
-    if (server.header("Cookie").indexOf("auth=granted") != -1) return true;
-  }
-  return false;
-}
+void changeState(SystemState newState) { currentState = newState; updateLEDs(); }
+
+bool isAuthenticated() { return server.hasHeader("Cookie") && server.header("Cookie").indexOf("auth=granted") != -1; }
 
 void handleRoot() {
   if (isAuthenticated()) {
@@ -180,98 +128,58 @@ void handleRoot() {
       <button type="button" id="scanBtn" class="btn-scan" onclick="scanWifi()">Scan Networks</button>
       <label>WiFi Password</label><input type="text" name="wifi_pass" value=")rawliteral" + currentWIFIPass + R"rawliteral(">
       </div>
-      
       <div class="card"><h3 style="color:#b026ff; margin:0;">2. SERVER SETTINGS</h3>
       <label>Ubuntu Server IP (e.g. 10.0.0.1)</label><input type="text" name="server_ip" value=")rawliteral" + serverIP + R"rawliteral(">
       <label>Vault API Master Key</label><input type="text" name="token" value=")rawliteral" + vaultToken + R"rawliteral(">
       <label>Dashboard Login Password</label><input type="text" name="admin_pwd" value=")rawliteral" + adminPass + R"rawliteral(">
-      </div>
-      
-      <button type="submit">SAVE & REBOOT</button></form>
-      <button type="button" class="btn-logout" onclick="window.location.href='/logout'">LOGOUT</button>
-      <br><br></body></html>)rawliteral";
+      </div><button type="submit">SAVE & REBOOT</button></form></body></html>)rawliteral";
     server.send(200, "text/html", page);
-  } else {
-    server.send(200, "text/html", loginHTML);
-  }
+  } else { server.send(200, "text/html", loginHTML); }
 }
 
 void handleLogin() {
   if (server.hasArg("pwd") && server.arg("pwd") == adminPass) {
     server.sendHeader("Set-Cookie", "auth=granted; Path=/; Max-Age=86400");
-    server.sendHeader("Location", "/"); 
-    server.send(303);
-  } else {
-    server.send(401, "text/html", "<h2>❌ ACCESS DENIED</h2><script>setTimeout(()=>window.location.href='/', 2000);</script>");
-  }
-}
-
-void handleLogout() { 
-  server.sendHeader("Set-Cookie", "auth=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT"); 
-  server.sendHeader("Location", "/"); 
-  server.send(303); 
+    server.sendHeader("Location", "/"); server.send(303);
+  } else { server.send(401, "text/html", "<h2>❌ ACCESS DENIED</h2>"); }
 }
 
 void handleScan() {
   if (!isAuthenticated()) return server.send(401, "text/plain", "");
-  int n = WiFi.scanNetworks(); 
-  String o = "";
-  for (int i=0; i<n; ++i) {
-      o += "<option value='" + WiFi.SSID(i) + "'>" + WiFi.SSID(i) + " (" + String(WiFi.RSSI(i)) + "dBm)</option>";
-  }
+  int n = WiFi.scanNetworks(); String o = "";
+  for (int i=0; i<n; ++i) o += "<option value='" + WiFi.SSID(i) + "'>" + WiFi.SSID(i) + "</option>";
   server.send(200, "text/plain", o);
 }
 
 void handleSave() {
   if (!isAuthenticated()) return server.send(401, "text/plain", "");
-  
-  writeString(0, server.arg("ssid"));
-  writeString(50, server.arg("wifi_pass"));
-  writeString(150, server.arg("token"));
-  writeString(200, server.arg("admin_pwd"));
+  writeString(0, server.arg("ssid")); writeString(50, server.arg("wifi_pass"));
+  writeString(150, server.arg("token")); writeString(200, server.arg("admin_pwd"));
   writeString(250, server.arg("server_ip"));
-  
-  server.send(200, "text/html", "<h2 style='color:#10b981; text-align:center; padding:50px;'>💾 SAVED! REBOOTING...</h2>");
-  delay(1500); 
-  ESP.restart();
+  server.send(200, "text/html", "<h2>💾 SAVED! REBOOTING...</h2>");
+  delay(1500); ESP.restart();
 }
 
 void handleOpenGate() {
-  if (server.arg("token") != vaultToken || !isServerOnline) {
-      return server.send(401, "application/json", "{\"status\":\"error\"}");
-  }
-  
-  insertMode = true;
-  digitalWrite(relayPin, HIGH); // Pull Relay ON
+  if (server.arg("token") != vaultToken || !isServerOnline) return server.send(401, "application/json", "{\"status\":\"error\"}");
+  insertMode = true; digitalWrite(relayPin, LOW); 
   sessionExpireTime = millis() + maxSessionLength; 
   changeState(READY_INSERT);
-  
   server.send(200, "application/json", "{\"status\":\"success\"}");
 }
 
 void handleCloseGate() {
-  if (server.arg("token") != vaultToken) {
-      return server.send(401, "application/json", "{\"status\":\"error\"}");
-  }
-  
-  insertMode = false;
-  digitalWrite(relayPin, LOW); // Turn Relay OFF
+  if (server.arg("token") != vaultToken) return server.send(401, "application/json", "{\"status\":\"error\"}");
+  insertMode = false; digitalWrite(relayPin, HIGH); 
   changeState(STANDBY);
-  
   server.send(200, "application/json", "{\"status\":\"success\"}");
 }
 
-void handlePing() { 
-  server.send(200, "application/json", "{\"status\":\"ONLINE\"}"); 
-}
+void handlePing() { server.send(200, "application/json", "{\"status\":\"ONLINE\"}"); }
 
-// ==========================================
-//  TRANSMIT DATA & REGISTRATION
-// ==========================================
 void transmitToVault(int amount) {
   if (WiFi.status() == WL_CONNECTED) {
-    WiFiClient client;
-    HTTPClient http;
+    WiFiClient client; HTTPClient http;
     http.begin(client, "http://" + serverIP + "/portal/slot_api.php");
     http.addHeader("Content-Type", "application/x-www-form-urlencoded");
     http.POST("action=pulse&coins=" + String(amount) + "&token=" + vaultToken);
@@ -281,146 +189,73 @@ void transmitToVault(int amount) {
 
 void registerWithUbuntu() {
   if(WiFi.status() == WL_CONNECTED) {
-    WiFiClient client;
-    HTTPClient http;
+    WiFiClient client; HTTPClient http;
     http.begin(client, "http://" + serverIP + "/register_esp.php?token=" + vaultToken);
-    http.GET(); 
-    http.end();
+    http.GET(); http.end();
   }
 }
 
-// ==========================================
-//  SETUP
-// ==========================================
 void setup() {
-  Serial.begin(115200);
-  EEPROM.begin(512); 
-  
-  pinMode(statusLedPin, OUTPUT);
-  digitalWrite(statusLedPin, LOW);
-  
-  pinMode(relayPin, OUTPUT);
-  digitalWrite(relayPin, LOW); 
-  
+  Serial.begin(115200); EEPROM.begin(512); 
+  pinMode(statusLedPin, OUTPUT); digitalWrite(statusLedPin, LOW);
+  pinMode(relayPin, OUTPUT); digitalWrite(relayPin, HIGH); 
   pinMode(coinPin, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(coinPin), coinInterrupt, FALLING);
 
   changeState(BOOTING);
 
-  // Load Configurations
-  currentSSID = readString(0);
-  if(currentSSID == "") currentSSID = "NIMOS MAIN 2.4G";
-  
-  currentWIFIPass = readString(50);
-  if(currentWIFIPass == "") currentWIFIPass = "01234567";
-  
-  vaultToken = readString(150);
-  if(vaultToken == "") vaultToken = "111625080052";
-  
-  adminPass = readString(200);
-  if(adminPass == "") adminPass = "01234567";
-  
-  serverIP = readString(250);
-  if(serverIP == "") serverIP = "10.0.0.1";
+  currentSSID = readString(0); if(currentSSID == "") currentSSID = "NIMOS MAIN 2.4G";
+  currentWIFIPass = readString(50); if(currentWIFIPass == "") currentWIFIPass = "01234567";
+  vaultToken = readString(150); if(vaultToken == "") vaultToken = "111625080052";
+  adminPass = readString(200); if(adminPass == "") adminPass = "01234567";
+  serverIP = readString(250); if(serverIP == "") serverIP = "10.0.0.1";
 
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(currentSSID.c_str(), currentWIFIPass.c_str());
+  WiFi.mode(WIFI_STA); WiFi.begin(currentSSID.c_str(), currentWIFIPass.c_str());
   
   int attempts = 0;
-  while (WiFi.status() != WL_CONNECTED && attempts < 25) {
-    delay(400); 
-    updateLEDs(); 
-    attempts++;
-  }
+  while (WiFi.status() != WL_CONNECTED && attempts < 25) { delay(400); updateLEDs(); attempts++; }
 
-  if (WiFi.status() == WL_CONNECTED) {
-    changeState(STANDBY);
-    registerWithUbuntu();
-  } else {
-    isAPMode = true;
-    WiFi.mode(WIFI_AP);
-    WiFi.softAP("VAULT_OS_SETUP", "01234567"); 
-    changeState(STANDBY);
-  }
+  if (WiFi.status() == WL_CONNECTED) { changeState(STANDBY); registerWithUbuntu(); } 
+  else { isAPMode = true; WiFi.mode(WIFI_AP); WiFi.softAP("VAULT_OS_SETUP", "01234567"); changeState(STANDBY); }
 
-  const char* headerkeys[] = {"Cookie"};
-  server.collectHeaders(headerkeys, 1);
-  
-  server.on("/", HTTP_GET, handleRoot); 
-  server.on("/login", HTTP_POST, handleLogin);
-  server.on("/logout", HTTP_GET, handleLogout); 
-  server.on("/scan", HTTP_GET, handleScan);
-  server.on("/save", HTTP_POST, handleSave);
-  server.on("/open", handleOpenGate); 
-  server.on("/close", handleCloseGate);
+  const char* headerkeys[] = {"Cookie"}; server.collectHeaders(headerkeys, 1);
+  server.on("/", HTTP_GET, handleRoot); server.on("/login", HTTP_POST, handleLogin);
+  server.on("/scan", HTTP_GET, handleScan); server.on("/save", HTTP_POST, handleSave);
+  server.on("/open", handleOpenGate); server.on("/close", handleCloseGate);
   server.on("/ping", handlePing);
-  
   server.begin();
 }
 
-// ==========================================
-//  MAIN LOOP
-// ==========================================
 void loop() {
   server.handleClient(); 
   unsigned long currentTime = millis();
-  
   updateLEDs(); 
 
-  // Server Keepalive Watchdog (Runs every 20 seconds)
   if (currentTime - lastPingTime > 20000) {
     lastPingTime = currentTime;
-    
     if (WiFi.status() == WL_CONNECTED && !isAPMode) {
-      WiFiClient client;
-      HTTPClient http;
+      WiFiClient client; HTTPClient http;
       http.begin(client, "http://" + serverIP + "/portal/slot_api.php?action=status"); 
       http.setTimeout(1500); 
-      int httpCode = http.GET();
-      http.end();
+      int httpCode = http.GET(); http.end();
       
-      if (httpCode > 0) {
-        if (!isServerOnline) {
-          isServerOnline = true;
-          changeState(STANDBY); 
-        }
-      } else {
-        if (isServerOnline) {
-          isServerOnline = false;
-          insertMode = false;
-          digitalWrite(relayPin, LOW); 
-          changeState(OFFLINE_MODE); 
-        }
-      }
-    } else {
-      if (isServerOnline && !isAPMode) {
-        isServerOnline = false;
-        insertMode = false;
-        digitalWrite(relayPin, LOW); 
-        changeState(OFFLINE_MODE);
-      }
-    }
+      if (httpCode > 0) { if (!isServerOnline) { isServerOnline = true; changeState(STANDBY); } } 
+      else { if (isServerOnline) { isServerOnline = false; insertMode = false; digitalWrite(relayPin, HIGH); changeState(OFFLINE_MODE); } }
+    } else { if (isServerOnline && !isAPMode) { isServerOnline = false; insertMode = false; digitalWrite(relayPin, HIGH); changeState(OFFLINE_MODE); } }
   }
 
-  // Session Timeout Check
   if (insertMode == true && currentTime > sessionExpireTime) {
-    insertMode = false;
-    digitalWrite(relayPin, LOW);
-    changeState(STANDBY);
+    insertMode = false; digitalWrite(relayPin, HIGH); changeState(STANDBY);
   }
 
-  // Coin Pulse Processor
   if (pulseCount > 0 && (currentTime - lastPulseTime > batchDelay)) {
     detachInterrupt(digitalPinToInterrupt(coinPin));
-    int rawPulses = pulseCount;
-    pulseCount = 0; 
+    int rawPulses = pulseCount; pulseCount = 0; 
     attachInterrupt(digitalPinToInterrupt(coinPin), coinInterrupt, FALLING);
 
     if (rawPulses > 0) {
       sessionExpireTime = currentTime + maxSessionLength; 
-      if (!isAPMode) { 
-        transmitToVault(rawPulses); 
-      }
+      if (!isAPMode) { transmitToVault(rawPulses); }
     }
   }
 }
